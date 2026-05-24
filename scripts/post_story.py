@@ -51,9 +51,23 @@ def get_drive_service():
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
-def list_photos(service) -> list[dict]:
+def list_subfolders(service, parent_id: str) -> list[dict]:
     query = (
-        f"'{DRIVE_FOLDER_ID}' in parents "
+        f"'{parent_id}' in parents "
+        "and mimeType = 'application/vnd.google-apps.folder' "
+        "and trashed=false"
+    )
+    result = (
+        service.files()
+        .list(q=query, fields="files(id,name)", orderBy="name")
+        .execute()
+    )
+    return result.get("files", [])
+
+
+def list_photos(service, folder_id: str) -> list[dict]:
+    query = (
+        f"'{folder_id}' in parents "
         "and mimeType contains 'image/' "
         "and trashed=false"
     )
@@ -199,8 +213,12 @@ def post_story(image_url: str, token: str) -> str:
 # ── Tracking ───────────────────────────────────────────────────────────────────
 def load_tracking() -> dict:
     if TRACKING_FILE.exists():
-        return json.loads(TRACKING_FILE.read_text(encoding="utf-8"))
-    return {"last_index": -1, "history": []}
+        data = json.loads(TRACKING_FILE.read_text(encoding="utf-8"))
+        # Migrar formato antiguo (last_index: int) al nuevo (last_index: {folder_id: int})
+        if isinstance(data.get("last_index"), int):
+            data["last_index"] = {}
+        return data
+    return {"last_index": {}, "history": []}
 
 
 def save_tracking(data: dict):
@@ -210,22 +228,44 @@ def save_tracking(data: dict):
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+WEEKDAY_NAMES = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes"]
+
+
 def main():
     print("=== Instagram Story Bot ===")
-    print(f"Hora UTC: {datetime.datetime.utcnow().isoformat()}")
+    now = datetime.datetime.utcnow()
+    print(f"Hora UTC: {now.isoformat()}")
+
+    weekday = now.weekday()  # 0=Lunes, 6=Domingo
+    if weekday >= 5:
+        print(f"\nHoy es fin de semana. No se publica.")
+        return
+    print(f"\nDia: {WEEKDAY_NAMES[weekday]}")
 
     print("\n[1/5] Refrescando token de Instagram...")
     token = refresh_token()
 
     print("\n[2/5] Listando fotos en Google Drive...")
     drive = get_drive_service()
-    photos = list_photos(drive)
+
+    subfolders = list_subfolders(drive, DRIVE_FOLDER_ID)
+    if len(subfolders) < 5:
+        raise RuntimeError(
+            f"Se esperan 5 subcarpetas en Drive pero se encontraron {len(subfolders)}. "
+            "Crea las 5 carpetas (ordenadas alfabeticamente: Lun, Mar, Mie, Jue, Vie)."
+        )
+
+    folder = subfolders[weekday]
+    print(f"  Carpeta del dia: {folder['name']}")
+
+    photos = list_photos(drive, folder["id"])
     if not photos:
-        raise RuntimeError("No se encontraron fotos en la carpeta de Drive.")
+        raise RuntimeError(f"No se encontraron fotos en la carpeta '{folder['name']}'.")
     print(f"  {len(photos)} fotos disponibles")
 
     tracking = load_tracking()
-    idx = (tracking["last_index"] + 1) % len(photos)
+    last = tracking["last_index"].get(folder["id"], -1)
+    idx = (last + 1) % len(photos)
     photo = photos[idx]
     print(f"  Seleccionada: {photo['name']} ({idx + 1}/{len(photos)})")
 
@@ -244,14 +284,15 @@ def main():
     media_id = post_story(image_url, token)
 
     print("\n[5/5] Guardando historial...")
-    tracking["last_index"] = idx
+    tracking["last_index"][folder["id"]] = idx
     tracking["history"].append(
         {
+            "folder_name": folder["name"],
             "file_name": photo["name"],
             "file_id": photo["id"],
             "media_id": media_id,
             "caption": caption,
-            "posted_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "posted_at": now.isoformat() + "Z",
         }
     )
     save_tracking(tracking)

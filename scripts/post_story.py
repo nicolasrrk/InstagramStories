@@ -26,6 +26,7 @@ DRIVE_FOLDER_ID = os.environ["GOOGLE_DRIVE_FOLDER_ID"]
 SA_JSON         = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
 GITHUB_TOKEN    = os.environ["GITHUB_TOKEN"]
 GITHUB_REPO     = os.environ["GITHUB_REPOSITORY"]   # owner/repo (Actions lo pone solo)
+STORIES_COUNT   = int(os.environ.get("STORIES_COUNT", "1"))
 
 TRACKING_FILE = Path("posted_photos.json")
 IG_API_BASE   = "https://graph.facebook.com/v21.0"
@@ -231,10 +232,42 @@ def save_tracking(data: dict):
 WEEKDAY_NAMES = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes"]
 
 
+def publish_one(drive, folder: dict, photos: list[dict], tracking: dict, token: str, now: datetime.datetime) -> None:
+    last = tracking["last_index"].get(folder["id"], -1)
+    idx = (last + 1) % len(photos)
+    photo = photos[idx]
+    print(f"  Seleccionada: {photo['name']} ({idx + 1}/{len(photos)})")
+
+    image_bytes = download_photo(drive, photo["id"])
+    print(f"  Descargados: {len(image_bytes):,} bytes")
+
+    safe_name = Path(photo["name"]).stem[:40] + ".jpg"
+    image_url = upload_image_to_release(image_bytes, safe_name)
+    print(f"  URL publica: {image_url}")
+
+    caption = make_caption(photo["name"])
+    print(f"  Caption: {caption}")
+
+    media_id = post_story(image_url, token)
+
+    tracking["last_index"][folder["id"]] = idx
+    tracking["history"].append(
+        {
+            "folder_name": folder["name"],
+            "file_name": photo["name"],
+            "file_id": photo["id"],
+            "media_id": media_id,
+            "caption": caption,
+            "posted_at": now.isoformat() + "Z",
+        }
+    )
+
+
 def main():
     print("=== Instagram Story Bot ===")
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     print(f"Hora UTC: {now.isoformat()}")
+    print(f"Historias a publicar: {STORIES_COUNT}")
 
     weekday = now.weekday()  # 0=Lunes, 6=Domingo
     if weekday >= 5:
@@ -242,10 +275,10 @@ def main():
         return
     print(f"\nDia: {WEEKDAY_NAMES[weekday]}")
 
-    print("\n[1/5] Refrescando token de Instagram...")
+    print("\n[1] Refrescando token de Instagram...")
     token = refresh_token()
 
-    print("\n[2/5] Listando fotos en Google Drive...")
+    print("\n[2] Listando fotos en Google Drive...")
     drive = get_drive_service()
 
     subfolders = list_subfolders(drive, DRIVE_FOLDER_ID)
@@ -264,40 +297,16 @@ def main():
     print(f"  {len(photos)} fotos disponibles")
 
     tracking = load_tracking()
-    last = tracking["last_index"].get(folder["id"], -1)
-    idx = (last + 1) % len(photos)
-    photo = photos[idx]
-    print(f"  Seleccionada: {photo['name']} ({idx + 1}/{len(photos)})")
 
-    print("\n[3/5] Descargando foto y subiendo a GitHub Releases...")
-    image_bytes = download_photo(drive, photo["id"])
-    print(f"  Descargados: {len(image_bytes):,} bytes")
+    for i in range(STORIES_COUNT):
+        print(f"\n--- Historia {i + 1}/{STORIES_COUNT} ---")
+        publish_one(drive, folder, photos, tracking, token, now)
+        save_tracking(tracking)
+        if i < STORIES_COUNT - 1:
+            print("  Esperando 10s antes de la siguiente...")
+            time.sleep(10)
 
-    safe_name = Path(photo["name"]).stem[:40] + ".jpg"
-    image_url = upload_image_to_release(image_bytes, safe_name)
-    print(f"  URL publica: {image_url}")
-
-    caption = make_caption(photo["name"])
-    print(f"  Caption: {caption}")
-
-    print("\n[4/5] Publicando historia en Instagram...")
-    media_id = post_story(image_url, token)
-
-    print("\n[5/5] Guardando historial...")
-    tracking["last_index"][folder["id"]] = idx
-    tracking["history"].append(
-        {
-            "folder_name": folder["name"],
-            "file_name": photo["name"],
-            "file_id": photo["id"],
-            "media_id": media_id,
-            "caption": caption,
-            "posted_at": now.isoformat() + "Z",
-        }
-    )
-    save_tracking(tracking)
-
-    print("\nHistoria publicada exitosamente!")
+    print(f"\n{STORIES_COUNT} historia(s) publicada(s) exitosamente!")
 
 
 if __name__ == "__main__":

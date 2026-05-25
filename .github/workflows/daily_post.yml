@@ -13,7 +13,13 @@ on:
     - cron: "0 16 * * 1-5"
     - cron: "0 18 * * 1-5"
     - cron: "0 21 * * 1-5"
-  workflow_dispatch: # Permite correrlo manualmente desde GitHub para testear
+  workflow_dispatch:
+    inputs:
+      stories_count:
+        description: 'Cuantas historias publicar (1-5)'
+        required: false
+        default: '5'
+        type: string
 
 jobs:
   post-story:
@@ -42,6 +48,7 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          # automatico, no hace falta configurarlo
           GITHUB_REPOSITORY: ${{ github.repository }}        # automatico
+          STORIES_COUNT: ${{ github.event.inputs.stories_count || '1' }}
         run: python scripts/post_story.py
 
       - name: Commitear historial de publicaciones

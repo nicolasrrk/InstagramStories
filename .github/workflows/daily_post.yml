@@ -1,18 +1,6 @@
 name: Daily Instagram Story
 
 on:
-  schedule:
-    # 5 publicaciones por dia (Lun-Vie), horarios Argentina (UTC-3):
-    #   12:00 UTC = 09:00 ARG
-    #   14:00 UTC = 11:00 ARG
-    #   16:00 UTC = 13:00 ARG
-    #   18:00 UTC = 15:00 ARG
-    #   21:00 UTC = 18:00 ARG
-    - cron: "0 12 * * 1-5"
-    - cron: "0 14 * * 1-5"
-    - cron: "0 16 * * 1-5"
-    - cron: "0 18 * * 1-5"
-    - cron: "0 21 * * 1-5"
   workflow_dispatch:
     inputs:
       stories_count:

@@ -1,7 +1,8 @@
 {
   "last_index": {
     "1Boqk-F5ebkqkt7yTNo913uxmqN_nSUBT": 2,
-    "1oyc46EMzgtx7nM11nBxZ_rxUltxh6ZK8": 1
+    "1oyc46EMzgtx7nM11nBxZ_rxUltxh6ZK8": 1,
+    "1Ls_xZ_bgYNSOv08N1rRa7HSi5rjMOZdN": 0
   },
   "history": [
     {
@@ -97,6 +98,14 @@
       "media_id": "18117376015816498",
       "caption": "Combo1.3Negro disponible! Mandanos un mensaje y te asesoramos.",
       "posted_at": "2026-05-26T16:00:57.736647Z"
+    },
+    {
+      "folder_name": "3_miercoles_termos_1L",
+      "file_name": "system.png",
+      "file_id": "14dMA3ZPIWazaCjyYi4KugM9az5-YDsdB",
+      "media_id": "17989396655992697",
+      "caption": "Stock disponible! Consulta por System hoy mismo.",
+      "posted_at": "2026-05-27T12:01:31.349137Z"
     }
   ]
 }
